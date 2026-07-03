@@ -82,26 +82,45 @@ npm run dev
 ```
 src/
   proxy.ts                    # protection des routes (remplace middleware.ts en Next 16)
-  types/index.ts               # types partagés (Lineup, MapName, User, Session...)
+  types/index.ts               # types partagés (Lineup, MapName, Book, BookSummary, Follow, Session...)
   lib/
     session.ts                 # config iron-session + getSession()
     supabase.ts                 # client anon (bloqué par RLS) + createAdminClient() (service role)
     steam.ts                    # OpenID 2.0 : URL de connexion + vérification callback
     maps.ts                     # liste des maps/types de grenade + isMapName()
     mapImages.ts                # chemins des assets par map (galerie, icônes, radars)
+    books.ts                    # requêtes partagées (livres d'un user, lineups déjà dans un de ses livres)
+    useZoomPan.ts                # hook zoom molette + pan au glisser, partagé radar/médias
   components/
-    RadarPicker.tsx              # placement interactif des points sur le radar (zoom/pan)
-    TagInput.tsx                 # saisie des tags avec suggestions
-    FilterBar.tsx                 # filtres type/difficulté
-    LineupCard.tsx                 # carte d'affichage d'une lineup
+    RadarPicker.tsx              # placement interactif des points sur le radar (zoom/pan/plein écran)
+    RadarViewer.tsx               # radar en lecture seule : filtre par type, clusters, aperçu au survol
+    TagInput.tsx                  # saisie des tags avec suggestions
+    LineupCard.tsx                  # vignette d'une lineup (pure présentation)
+    LineupDetailModal.tsx            # fenêtre de détail (médias, livres, modifier, supprimer)
+    LineupGrid.tsx                    # grille + état "quelle lineup est ouverte" (partageable avec le radar)
+    LineupForm.tsx                     # formulaire création/édition (RadarPicker + TagInput + médias)
+    BookPicker.tsx                      # choisir/créer un ou plusieurs livres pour une lineup
+    BookCard.tsx                         # carte livre (supprimer si le tien, copier sinon)
+    BookLineupSelector.tsx                # vue d'un livre d'un autre user : sélection multiple + ajout
+    CreateBookInline.tsx                   # mini-formulaire "+ nouveau livre" (map + nom)
+    FollowButton.tsx                        # bouton s'abonner/se désabonner
+    MediaView.tsx                            # <img> ou <video> selon l'extension de l'URL
+    ZoomableMedia.tsx                         # média avec zoom/pan + plein écran (visée/résultat)
+    GrenadeIcon.tsx                            # icône par type de grenade
+    LogoutButton.tsx                           # déconnexion
   app/
     page.tsx                    # galerie de sélection de map
-    map/[map]/page.tsx           # pool de lineups d'une map + filtres
-    map/[map]/new/page.tsx        # formulaire de création de lineup
-    map/[map]/actions.ts           # Server Action createLineup (upload médias + insert DB)
-    my-book/page.tsx              # livre personnel (à venir)
-    login/page.tsx                 # connexion Steam
-    api/auth/steam/                # routes OAuth Steam (login, callback, logout)
+    map/[map]/page.tsx           # charge les données, délègue l'affichage à MapPoolView
+    map/[map]/new/page.tsx        # création de lineup (LineupForm)
+    map/[map]/[id]/edit/page.tsx    # édition de lineup (LineupForm pré-rempli)
+    map/[map]/actions.ts              # createLineup/updateLineup (useActionState) + deleteLineup
+    u/[steamId]/page.tsx                # profil : livres par map, abonnés/abonnements, lineups créées
+    u/[steamId]/books/[bookId]/page.tsx   # contenu d'un livre
+    u/[steamId]/actions.ts                  # createBook/deleteBook/copyBook/setLineupBooks/
+                                              # addLineupsToBooks/toggleFollow/getLineupBookIds
+    login/page.tsx                             # connexion Steam
+    api/auth/steam/                             # routes OAuth Steam (login, callback, logout)
+    error.tsx / global-error.tsx / not-found.tsx # pages d'erreur (voir notes ci-dessous)
 
 public/
   maps/                        # screenshots en jeu (galerie de sélection)
@@ -110,7 +129,7 @@ public/
 
 supabase/
   schema.sql                   # schéma de base
-  migrations/                  # évolutions du schéma
+  migrations/                  # évolutions du schéma, à lancer dans l'ordre
 ```
 
 ## Notes d'architecture
@@ -119,6 +138,8 @@ supabase/
 - **Positions des lineups** : `from_x/from_y/to_x/to_y` sont des coordonnées normalisées (0–1) relatives à l'image radar, placées par clic dans `RadarPicker`. `from_pos`/`to_pos` restent des libellés texte lisibles (ex: "T Spawn").
 - **Médias** (`media_lineup`, `media_result`, `media_gif`) : uploadés vers le bucket public Supabase Storage `lineup-media` au moment de la création (voir `map/[map]/actions.ts`).
 - **Server Actions** : `next.config.ts` relève `experimental.serverActions.bodySizeLimit` à `25mb` pour permettre l'upload de médias (limite par défaut : 1MB).
+- **Livres et profils** : chaque livre (`books`) est rattaché à une map précise et appartient à un utilisateur, qui peut en avoir plusieurs par map. `book_lineups` (table de jointure) relie livres et lineups. Les profils (`/u/[steamId]`) affichent les livres groupés par map, les lineups créées, et les compteurs d'abonnés/abonnements (`follows`, à sens unique, sans approbation). Depuis le profil ou le détail d'un livre d'un autre utilisateur, on peut copier tout son livre ou sélectionner des lineups précises à ajouter à ses propres livres.
+- **Gestion d'erreur** : `createLineup`/`updateLineup` renvoient `{ error }` (via `useActionState`) plutôt que de lever une exception, pour un message inline dans le formulaire. Les autres mutations (suppression, livres, abonnements) sont appelées depuis des gestionnaires d'événements et restent des exceptions, attrapées côté composant. `error.tsx`/`global-error.tsx`/`not-found.tsx` gèrent les erreurs non prévues.
 
 ## Documentation
 

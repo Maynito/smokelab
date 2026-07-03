@@ -17,8 +17,8 @@ const DEFAULT_TAGS = [
   "anti-eco",
 ]
 
-export function TagInput({ name = "tags" }: { name?: string }) {
-  const [tags, setTags] = useState<string[]>([])
+export function TagInput({ name = "tags", initialTags = [] }: { name?: string; initialTags?: string[] }) {
+  const [tags, setTags] = useState<string[]>(initialTags)
   const [input, setInput] = useState("")
   const [showSuggestions, setShowSuggestions] = useState(false)
 

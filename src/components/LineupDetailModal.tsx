@@ -1,34 +1,41 @@
 "use client"
 
 import { useEffect, useState, useTransition } from "react"
-import type { Lineup } from "@/types"
+import Link from "next/link"
+import type { BookSummary, Lineup } from "@/types"
 import { MAP_IMAGES } from "@/lib/mapImages"
 import { MediaView } from "@/components/MediaView"
 import { ZoomableMedia } from "@/components/ZoomableMedia"
 import { TypeBadge, DifficultyDots } from "@/components/LineupBadges"
+import { BookPicker } from "@/components/BookPicker"
 import { deleteLineup } from "@/app/map/[map]/actions"
-import { toggleBookmark } from "@/app/my-book/actions"
+import { getLineupBookIds, setLineupBooks } from "@/app/u/[steamId]/actions"
 
 export function LineupDetailModal({
   lineup,
   currentUserId,
   isAdmin,
-  isBookmarked,
+  myBooks,
   onClose,
 }: {
   lineup: Lineup
   currentUserId: string
   isAdmin: boolean
-  isBookmarked: boolean
+  myBooks: BookSummary[]
   onClose: () => void
 }) {
   const [mediaView, setMediaView] = useState<"gif" | "stills">("gif")
   const [expandedMedia, setExpandedMedia] = useState<"lineup" | "result" | null>(null)
   const [isDeleting, startDeleteTransition] = useTransition()
-  const [isBookmarking, startBookmarkTransition] = useTransition()
-  const [bookmarked, setBookmarked] = useState(isBookmarked)
+  const [deleteError, setDeleteError] = useState<string | null>(null)
 
-  const canDelete = isAdmin || lineup.created_by === currentUserId
+  const [booksPickerOpen, setBooksPickerOpen] = useState(false)
+  const [lineupBookIds, setLineupBookIdsState] = useState<string[] | null>(null)
+  const [loadingBooks, startLoadingBooks] = useTransition()
+  const [booksError, setBooksError] = useState<string | null>(null)
+
+  const canManage = isAdmin || lineup.created_by === currentUserId
+  const booksForThisMap = myBooks.filter((b) => b.map === lineup.map)
 
   useEffect(() => {
     function handleKey(e: KeyboardEvent) {
@@ -42,18 +49,33 @@ export function LineupDetailModal({
 
   function handleDelete() {
     if (!confirm("Supprimer définitivement cette lineup ?")) return
+    setDeleteError(null)
     startDeleteTransition(async () => {
-      await deleteLineup(lineup.id)
-      onClose()
+      try {
+        await deleteLineup(lineup.id)
+        onClose()
+      } catch {
+        setDeleteError("Impossible de supprimer cette lineup. Réessaie.")
+      }
     })
   }
 
-  function handleToggleBookmark() {
-    const next = !bookmarked
-    setBookmarked(next)
-    startBookmarkTransition(async () => {
-      await toggleBookmark(lineup.id)
+  function openBooksPicker() {
+    setBooksError(null)
+    startLoadingBooks(async () => {
+      try {
+        const ids = await getLineupBookIds(lineup.id)
+        setLineupBookIdsState(ids)
+        setBooksPickerOpen(true)
+      } catch {
+        setBooksError("Impossible de charger tes livres.")
+      }
     })
+  }
+
+  async function handleSaveBooks(bookIds: string[]) {
+    await setLineupBooks(lineup.id, bookIds)
+    setLineupBookIdsState(bookIds)
   }
 
   return (
@@ -130,18 +152,23 @@ export function LineupDetailModal({
             <div className="flex gap-2">
               <button
                 type="button"
-                onClick={handleToggleBookmark}
-                disabled={isBookmarking}
-                className={`text-xs px-3 py-1.5 rounded-md transition-colors disabled:opacity-50 ${
-                  bookmarked
-                    ? "bg-orange-500 text-white hover:bg-orange-600"
-                    : "bg-zinc-800 text-zinc-300 hover:bg-zinc-700"
-                }`}
+                onClick={openBooksPicker}
+                disabled={loadingBooks}
+                className="text-xs px-3 py-1.5 rounded-md bg-zinc-800 text-zinc-300 hover:bg-zinc-700 transition-colors disabled:opacity-50"
               >
-                {bookmarked ? "Dans mon livre ✓" : "Ajouter à mon livre"}
+                {loadingBooks ? "..." : "Mes livres"}
               </button>
 
-              {canDelete && (
+              {canManage && (
+                <Link
+                  href={`/map/${lineup.map}/${lineup.id}/edit`}
+                  className="text-xs px-3 py-1.5 rounded-md bg-zinc-800 text-zinc-300 hover:bg-zinc-700 transition-colors"
+                >
+                  Modifier
+                </Link>
+              )}
+
+              {canManage && (
                 <button
                   type="button"
                   onClick={handleDelete}
@@ -153,6 +180,10 @@ export function LineupDetailModal({
               )}
             </div>
           </div>
+
+          {(deleteError || booksError) && (
+            <p className="text-xs text-red-400">{deleteError || booksError}</p>
+          )}
 
           <div className="flex items-center justify-between">
             <span className="flex items-center gap-1.5 text-sm font-medium text-white capitalize">
@@ -179,6 +210,16 @@ export function LineupDetailModal({
           )}
         </div>
       </div>
+
+      {booksPickerOpen && lineupBookIds && (
+        <BookPicker
+          map={lineup.map}
+          books={booksForThisMap}
+          initiallySelected={lineupBookIds}
+          onClose={() => setBooksPickerOpen(false)}
+          onSave={handleSaveBooks}
+        />
+      )}
     </div>
   )
 }

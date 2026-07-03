@@ -9,16 +9,21 @@ import type { GrenadeType } from "@/types"
 
 const MEDIA_FIELDS = ["media_lineup", "media_result", "media_gif"] as const
 
-export async function createLineup(formData: FormData) {
+export type LineupFormState = { error: string } | undefined
+
+export async function createLineup(
+  _prevState: LineupFormState,
+  formData: FormData
+): Promise<LineupFormState> {
   const session = await getSession()
-  if (!session.user) throw new Error("Unauthorized")
+  if (!session.user) return { error: "Ta session a expiré, reconnecte-toi." }
 
   const map = formData.get("map")
-  if (typeof map !== "string" || !isMapName(map)) throw new Error("Map invalide")
+  if (typeof map !== "string" || !isMapName(map)) return { error: "Map invalide." }
 
   const type = formData.get("type")
   if (typeof type !== "string" || !GRENADE_TYPES.includes(type as GrenadeType)) {
-    throw new Error("Type invalide")
+    return { error: "Type de grenade invalide." }
   }
 
   const fromPos = formData.get("from_pos")
@@ -35,11 +40,11 @@ export async function createLineup(formData: FormData) {
     !toPos.trim() ||
     [fromX, fromY, toX, toY].some((n) => Number.isNaN(n))
   ) {
-    throw new Error("Place les deux points sur le radar et remplis les positions")
+    return { error: "Place les deux points sur le radar et remplis les positions." }
   }
 
   const difficulty = Number(formData.get("difficulty"))
-  if (![1, 2, 3].includes(difficulty)) throw new Error("Difficulté invalide")
+  if (![1, 2, 3].includes(difficulty)) return { error: "Difficulté invalide." }
 
   const tags = formData
     .getAll("tags")
@@ -48,20 +53,23 @@ export async function createLineup(formData: FormData) {
 
   const admin = createAdminClient()
 
-  const mediaUrls = await Promise.all(
-    MEDIA_FIELDS.map(async (field) => {
-      const file = formData.get(field)
-      if (!(file instanceof File) || file.size === 0) {
-        throw new Error(`Fichier manquant pour ${field}`)
-      }
-      const path = `${map}/${crypto.randomUUID()}-${file.name}`
-      const { error } = await admin.storage
-        .from("lineup-media")
-        .upload(path, file, { contentType: file.type })
-      if (error) throw error
-      return admin.storage.from("lineup-media").getPublicUrl(path).data.publicUrl
-    })
-  )
+  for (const field of MEDIA_FIELDS) {
+    const file = formData.get(field)
+    if (!(file instanceof File) || file.size === 0) {
+      return { error: "Les 3 médias (visée, résultat, gif) sont obligatoires." }
+    }
+  }
+
+  const mediaUrls: string[] = []
+  for (const field of MEDIA_FIELDS) {
+    const file = formData.get(field) as File
+    const path = `${map}/${crypto.randomUUID()}-${file.name}`
+    const { error } = await admin.storage
+      .from("lineup-media")
+      .upload(path, file, { contentType: file.type })
+    if (error) return { error: "Échec de l'upload d'un média. Réessaie." }
+    mediaUrls.push(admin.storage.from("lineup-media").getPublicUrl(path).data.publicUrl)
+  }
 
   const { error } = await admin.from("lineups").insert({
     map,
@@ -80,7 +88,103 @@ export async function createLineup(formData: FormData) {
     created_by: session.user.id,
   })
 
-  if (error) throw error
+  if (error) return { error: "Échec de l'enregistrement de la lineup. Réessaie." }
+
+  revalidatePath(`/map/${map}`)
+  redirect(`/map/${map}`)
+}
+
+export async function updateLineup(
+  _prevState: LineupFormState,
+  formData: FormData
+): Promise<LineupFormState> {
+  const session = await getSession()
+  if (!session.user) return { error: "Ta session a expiré, reconnecte-toi." }
+
+  const lineupId = formData.get("lineup_id")
+  if (typeof lineupId !== "string" || !lineupId) return { error: "Lineup invalide." }
+
+  const admin = createAdminClient()
+
+  const { data: existing, error: fetchError } = await admin
+    .from("lineups")
+    .select("created_by, media_lineup, media_result, media_gif")
+    .eq("id", lineupId)
+    .single()
+
+  if (fetchError || !existing) return { error: "Lineup introuvable." }
+
+  const canEdit = session.user.is_admin || existing.created_by === session.user.id
+  if (!canEdit) return { error: "Tu n'as pas le droit de modifier cette lineup." }
+
+  const map = formData.get("map")
+  if (typeof map !== "string" || !isMapName(map)) return { error: "Map invalide." }
+
+  const type = formData.get("type")
+  if (typeof type !== "string" || !GRENADE_TYPES.includes(type as GrenadeType)) {
+    return { error: "Type de grenade invalide." }
+  }
+
+  const fromPos = formData.get("from_pos")
+  const toPos = formData.get("to_pos")
+  const fromX = parseFloat(String(formData.get("from_x")))
+  const fromY = parseFloat(String(formData.get("from_y")))
+  const toX = parseFloat(String(formData.get("to_x")))
+  const toY = parseFloat(String(formData.get("to_y")))
+
+  if (
+    typeof fromPos !== "string" ||
+    !fromPos.trim() ||
+    typeof toPos !== "string" ||
+    !toPos.trim() ||
+    [fromX, fromY, toX, toY].some((n) => Number.isNaN(n))
+  ) {
+    return { error: "Place les deux points sur le radar et remplis les positions." }
+  }
+
+  const difficulty = Number(formData.get("difficulty"))
+  if (![1, 2, 3].includes(difficulty)) return { error: "Difficulté invalide." }
+
+  const tags = formData
+    .getAll("tags")
+    .map((t) => String(t).trim())
+    .filter(Boolean)
+
+  const mediaUrls: string[] = []
+  for (const field of MEDIA_FIELDS) {
+    const file = formData.get(field)
+    if (file instanceof File && file.size > 0) {
+      const path = `${map}/${crypto.randomUUID()}-${file.name}`
+      const { error } = await admin.storage
+        .from("lineup-media")
+        .upload(path, file, { contentType: file.type })
+      if (error) return { error: "Échec de l'upload d'un média. Réessaie." }
+      mediaUrls.push(admin.storage.from("lineup-media").getPublicUrl(path).data.publicUrl)
+    } else {
+      mediaUrls.push(existing[field])
+    }
+  }
+
+  const { error } = await admin
+    .from("lineups")
+    .update({
+      map,
+      type,
+      from_pos: fromPos.trim(),
+      to_pos: toPos.trim(),
+      from_x: fromX,
+      from_y: fromY,
+      to_x: toX,
+      to_y: toY,
+      tags,
+      difficulty,
+      media_lineup: mediaUrls[0],
+      media_result: mediaUrls[1],
+      media_gif: mediaUrls[2],
+    })
+    .eq("id", lineupId)
+
+  if (error) return { error: "Échec de l'enregistrement des modifications. Réessaie." }
 
   revalidatePath(`/map/${map}`)
   redirect(`/map/${map}`)
@@ -118,7 +222,7 @@ export async function deleteLineup(lineupId: string) {
   }
 
   const { error } = await admin.from("lineups").delete().eq("id", lineupId)
-  if (error) throw error
+  if (error) throw new Error("Échec de la suppression. Réessaie.")
 
   revalidatePath(`/map/${lineup.map}`)
 }

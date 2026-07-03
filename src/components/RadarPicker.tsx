@@ -34,9 +34,17 @@ function CompressIcon() {
   )
 }
 
-export function RadarPicker({ radarSrc }: { radarSrc: string }) {
-  const [fromPoint, setFromPoint] = useState<Point | null>(null)
-  const [toPoint, setToPoint] = useState<Point | null>(null)
+export function RadarPicker({
+  radarSrc,
+  initialFrom,
+  initialTo,
+}: {
+  radarSrc: string
+  initialFrom?: Point
+  initialTo?: Point
+}) {
+  const [fromPoint, setFromPoint] = useState<Point | null>(initialFrom ?? null)
+  const [toPoint, setToPoint] = useState<Point | null>(initialTo ?? null)
   const [expanded, setExpanded] = useState(false)
   const { frameRef, view, handleMouseDown, reset: resetView } = useZoomPan()
   const contentRef = useRef<HTMLDivElement>(null)

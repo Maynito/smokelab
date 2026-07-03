@@ -1,7 +1,7 @@
 "use client"
 
 import { useState } from "react"
-import type { Lineup } from "@/types"
+import type { BookSummary, Lineup } from "@/types"
 import { LineupCard } from "@/components/LineupCard"
 import { LineupDetailModal } from "@/components/LineupDetailModal"
 
@@ -10,6 +10,7 @@ export function LineupGrid({
   currentUserId,
   isAdmin,
   bookmarkedIds,
+  myBooks,
   openLineupId: controlledOpenId,
   onOpenLineupIdChange,
 }: {
@@ -17,6 +18,7 @@ export function LineupGrid({
   currentUserId: string
   isAdmin: boolean
   bookmarkedIds: string[]
+  myBooks: BookSummary[]
   openLineupId?: string | null
   onOpenLineupIdChange?: (id: string | null) => void
 }) {
@@ -44,7 +46,7 @@ export function LineupGrid({
           lineup={openLineup}
           currentUserId={currentUserId}
           isAdmin={isAdmin}
-          isBookmarked={bookmarkedIds.includes(openLineup.id)}
+          myBooks={myBooks}
           onClose={() => setOpenLineupId(null)}
         />
       )}

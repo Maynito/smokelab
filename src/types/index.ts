@@ -33,12 +33,28 @@ export interface Lineup {
   created_at: string
 }
 
-export interface UserLineup {
+export interface Book {
+  id: string
   user_id: string
+  map: MapName
+  name: string
+  created_at: string
+}
+
+export type BookSummary = Pick<Book, "id" | "name" | "map">
+
+export interface BookLineup {
+  book_id: string
   lineup_id: string
   mastered: boolean
   note: string | null
   added_at: string
+}
+
+export interface Follow {
+  follower_id: string
+  followed_id: string
+  created_at: string
 }
 
 export interface User {
