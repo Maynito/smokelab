@@ -76,16 +76,16 @@ export default async function NewLineupPage({
           </div>
 
           <div>
-            <label className="text-xs text-zinc-400 mb-1 block">Média — setup</label>
-            <input type="file" name="media_setup" accept="image/*,video/*" required className={inputClass} />
-          </div>
-          <div>
-            <label className="text-xs text-zinc-400 mb-1 block">Média — visée</label>
-            <input type="file" name="media_aim" accept="image/*,video/*" required className={inputClass} />
+            <label className="text-xs text-zinc-400 mb-1 block">Média — visée / lineup</label>
+            <input type="file" name="media_lineup" accept="image/*,video/*" required className={inputClass} />
           </div>
           <div>
             <label className="text-xs text-zinc-400 mb-1 block">Média — résultat</label>
             <input type="file" name="media_result" accept="image/*,video/*" required className={inputClass} />
+          </div>
+          <div>
+            <label className="text-xs text-zinc-400 mb-1 block">Média — gif</label>
+            <input type="file" name="media_gif" accept="image/gif,video/*" required className={inputClass} />
           </div>
 
           <button

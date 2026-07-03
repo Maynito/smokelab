@@ -26,9 +26,9 @@ export interface Lineup {
   to_y: number
   tags: string[]
   difficulty: Difficulty
-  media_setup: string
-  media_aim: string
+  media_lineup: string
   media_result: string
+  media_gif: string
   created_by: string
   created_at: string
 }
@@ -46,6 +46,7 @@ export interface User {
   steam_id: string
   steam_name: string
   avatar_url: string
+  is_admin: boolean
   created_at: string
 }
 
@@ -54,4 +55,5 @@ export interface SessionUser {
   steam_id: string
   steam_name: string
   avatar_url: string
+  is_admin: boolean
 }

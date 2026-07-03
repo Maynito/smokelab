@@ -1,49 +1,47 @@
 import type { Lineup } from "@/types"
 import { MAP_IMAGES } from "@/lib/mapImages"
+import { MediaView } from "@/components/MediaView"
+import { TypeBadge, DifficultyDots } from "@/components/LineupBadges"
 
-const TYPE_COLORS: Record<Lineup["type"], string> = {
-  smoke: "bg-zinc-400/10 text-zinc-300 border-zinc-400/30",
-  flash: "bg-yellow-400/10 text-yellow-300 border-yellow-400/30",
-  molotov: "bg-orange-500/10 text-orange-400 border-orange-500/30",
-  he: "bg-red-500/10 text-red-400 border-red-500/30",
-}
-
-export function LineupCard({ lineup }: { lineup: Lineup }) {
+export function LineupCard({
+  lineup,
+  isBookmarked,
+  onOpen,
+}: {
+  lineup: Lineup
+  isBookmarked: boolean
+  onOpen: () => void
+}) {
   return (
-    <div className="rounded-lg border border-zinc-800 bg-zinc-900 overflow-hidden hover:border-zinc-700 transition-colors">
+    <button
+      type="button"
+      onClick={onOpen}
+      className="text-left w-full rounded-lg border border-zinc-800 bg-zinc-900 overflow-hidden hover:border-zinc-700 transition-colors"
+    >
       <div className="aspect-video bg-zinc-800 relative">
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
-          src={lineup.media_setup}
+        <MediaView
+          src={lineup.media_gif}
           alt={`${lineup.from_pos} → ${lineup.to_pos}`}
           className="w-full h-full object-cover"
         />
-        <span
-          className={`absolute top-2 left-2 text-xs px-2 py-0.5 rounded border capitalize ${TYPE_COLORS[lineup.type]}`}
-        >
-          {lineup.type}
-        </span>
+        <TypeBadge type={lineup.type} className="absolute top-2 left-2 bg-zinc-950/80" />
+        {isBookmarked && (
+          <span className="absolute top-2 right-2 rounded-full bg-orange-500 p-1 text-white">
+            <svg viewBox="0 0 24 24" fill="currentColor" className="w-3 h-3">
+              <path d="M6 3a1 1 0 0 0-1 1v17l7-4 7 4V4a1 1 0 0 0-1-1H6Z" />
+            </svg>
+          </span>
+        )}
       </div>
 
       <div className="p-3">
         <div className="flex items-center justify-between mb-1">
           <span className="flex items-center gap-1.5 text-sm font-medium text-white capitalize">
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src={MAP_IMAGES[lineup.map]}
-              alt=""
-              className="w-4 h-4 rounded-sm object-cover"
-            />
+            <img src={MAP_IMAGES[lineup.map]} alt="" className="w-4 h-4 rounded-sm object-cover" />
             {lineup.map}
           </span>
-          <div className="flex gap-0.5">
-            {[1, 2, 3].map((n) => (
-              <span
-                key={n}
-                className={`w-1.5 h-1.5 rounded-full ${n <= lineup.difficulty ? "bg-orange-500" : "bg-zinc-700"}`}
-              />
-            ))}
-          </div>
+          <DifficultyDots difficulty={lineup.difficulty} />
         </div>
 
         <p className="text-xs text-zinc-400 truncate">
@@ -60,6 +58,6 @@ export function LineupCard({ lineup }: { lineup: Lineup }) {
           </div>
         )}
       </div>
-    </div>
+    </button>
   )
 }

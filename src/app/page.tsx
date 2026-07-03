@@ -10,9 +10,14 @@ export default async function HomePage() {
 
   return (
     <main className="min-h-screen bg-zinc-950 text-white p-8">
-      <h1 className="text-2xl font-bold mb-2">
-        smoke<span className="text-orange-500">lab</span>
-      </h1>
+      <div className="flex items-center justify-between mb-2">
+        <h1 className="text-2xl font-bold">
+          smoke<span className="text-orange-500">lab</span>
+        </h1>
+        <Link href="/my-book" className="text-sm text-zinc-400 hover:text-white">
+          Mon livre
+        </Link>
+      </div>
       <p className="text-zinc-400 text-sm mb-8">Choisis une map</p>
 
       <div className="grid grid-cols-5 gap-4 max-w-[780px] mx-auto">

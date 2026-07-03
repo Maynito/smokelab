@@ -35,6 +35,7 @@ export async function GET(req: NextRequest) {
       steam_id: user.steam_id,
       steam_name: user.steam_name,
       avatar_url: user.avatar_url,
+      is_admin: user.is_admin,
     }
     await session.save()
 

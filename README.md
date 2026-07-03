@@ -48,7 +48,17 @@ Remplir dans `.env.local` :
 Dans le SQL Editor du projet Supabase, exécuter **dans l'ordre** :
 
 1. [`supabase/schema.sql`](./supabase/schema.sql) — tables `users`, `lineups`, `user_lineups` + RLS
-2. Chaque fichier de [`supabase/migrations/`](./supabase/migrations/), dans l'ordre numérique (ex: `002_lineup_positions_and_storage.sql` ajoute les coordonnées radar + le bucket de stockage des médias)
+2. Chaque fichier de [`supabase/migrations/`](./supabase/migrations/), dans l'ordre numérique
+
+Créer ensuite le bucket de stockage des médias (`lineup-media`, public) — **pas possible via le SQL Editor** sur Supabase hosted (écriture directe sur `storage.buckets` bloquée), il faut passer par le Dashboard (Storage → New bucket → cocher "Public") ou l'API :
+
+```bash
+curl -X POST "$NEXT_PUBLIC_SUPABASE_URL/storage/v1/bucket" \
+  -H "apikey: $SUPABASE_SERVICE_ROLE_KEY" \
+  -H "Authorization: Bearer $SUPABASE_SERVICE_ROLE_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"id":"lineup-media","name":"lineup-media","public":true}'
+```
 
 ### 4. Lancer le projet
 
@@ -107,7 +117,7 @@ supabase/
 
 - **Pas de Supabase Auth** : l'authentification passe entièrement par Steam OpenID + une session `iron-session` (cookie httpOnly chiffré). Les policies RLS Supabase n'ont donc pas accès à `auth.uid()` — toutes les lectures/écritures passent par les Server Components / Server Actions via `createAdminClient()` (clé `service_role`, contourne la RLS). Le client anon exporté par `src/lib/supabase.ts` n'est volontairement utilisable pour aucune requête utile côté navigateur.
 - **Positions des lineups** : `from_x/from_y/to_x/to_y` sont des coordonnées normalisées (0–1) relatives à l'image radar, placées par clic dans `RadarPicker`. `from_pos`/`to_pos` restent des libellés texte lisibles (ex: "T Spawn").
-- **Médias** (`media_setup`, `media_aim`, `media_result`) : uploadés vers le bucket public Supabase Storage `lineup-media` au moment de la création (voir `map/[map]/actions.ts`).
+- **Médias** (`media_lineup`, `media_result`, `media_gif`) : uploadés vers le bucket public Supabase Storage `lineup-media` au moment de la création (voir `map/[map]/actions.ts`).
 - **Server Actions** : `next.config.ts` relève `experimental.serverActions.bodySizeLimit` à `25mb` pour permettre l'upload de médias (limite par défaut : 1MB).
 
 ## Documentation

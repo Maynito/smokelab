@@ -1,26 +1,13 @@
 "use client"
 
-import { useEffect, useRef, useState } from "react"
+import { useRef, useState } from "react"
 import { flushSync } from "react-dom"
+import { useZoomPan } from "@/lib/useZoomPan"
 
 type Point = { x: number; y: number }
-type View = { zoom: number; x: number; y: number }
-
-const MIN_ZOOM = 1
-const MAX_ZOOM = 3
-const DRAG_THRESHOLD = 3
 
 type DocumentWithViewTransitions = Document & {
   startViewTransition?: (callback: () => void) => unknown
-}
-
-function clampPan(pan: Point, zoom: number, rect: { width: number; height: number }): Point {
-  const minX = rect.width * (1 - zoom)
-  const minY = rect.height * (1 - zoom)
-  return {
-    x: Math.min(0, Math.max(minX, pan.x)),
-    y: Math.min(0, Math.max(minY, pan.y)),
-  }
 }
 
 function ExpandIcon() {
@@ -51,8 +38,7 @@ export function RadarPicker({ radarSrc }: { radarSrc: string }) {
   const [fromPoint, setFromPoint] = useState<Point | null>(null)
   const [toPoint, setToPoint] = useState<Point | null>(null)
   const [expanded, setExpanded] = useState(false)
-  const [view, setView] = useState<View>({ zoom: 1, x: 0, y: 0 })
-  const frameRef = useRef<HTMLDivElement>(null)
+  const { frameRef, view, handleMouseDown, reset: resetView } = useZoomPan()
   const contentRef = useRef<HTMLDivElement>(null)
 
   const step = !fromPoint ? "from" : !toPoint ? "to" : "done"
@@ -68,35 +54,6 @@ export function RadarPicker({ radarSrc }: { radarSrc: string }) {
     else setToPoint(point)
   }
 
-  function handleMouseDown(e: React.MouseEvent) {
-    if (e.button !== 0) return
-    const startX = e.clientX
-    const startY = e.clientY
-    const startPan = { x: view.x, y: view.y }
-    let moved = false
-
-    function onMove(ev: MouseEvent) {
-      const dx = ev.clientX - startX
-      const dy = ev.clientY - startY
-      if (Math.abs(dx) > DRAG_THRESHOLD || Math.abs(dy) > DRAG_THRESHOLD) moved = true
-      if (!moved || !frameRef.current) return
-      const rect = frameRef.current.getBoundingClientRect()
-      setView((v) => {
-        const pan = clampPan({ x: startPan.x + dx, y: startPan.y + dy }, v.zoom, rect)
-        return { ...v, ...pan }
-      })
-    }
-
-    function onUp(ev: MouseEvent) {
-      window.removeEventListener("mousemove", onMove)
-      window.removeEventListener("mouseup", onUp)
-      if (!moved) placePointAt(ev.clientX, ev.clientY)
-    }
-
-    window.addEventListener("mousemove", onMove)
-    window.addEventListener("mouseup", onUp)
-  }
-
   function reset() {
     setFromPoint(null)
     setToPoint(null)
@@ -106,7 +63,7 @@ export function RadarPicker({ radarSrc }: { radarSrc: string }) {
     const next = !expanded
     function apply() {
       setExpanded(next)
-      setView({ zoom: 1, x: 0, y: 0 })
+      resetView()
     }
     const doc = document as DocumentWithViewTransitions
     if (doc.startViewTransition) {
@@ -115,34 +72,6 @@ export function RadarPicker({ radarSrc }: { radarSrc: string }) {
       apply()
     }
   }
-
-  useEffect(() => {
-    const el = frameRef.current
-    if (!el) return
-
-    function handleWheel(e: WheelEvent) {
-      e.preventDefault()
-      if (!frameRef.current) return
-      const rect = frameRef.current.getBoundingClientRect()
-      const mx = e.clientX - rect.left
-      const my = e.clientY - rect.top
-
-      setView((v) => {
-        const newZoom = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, v.zoom - e.deltaY * 0.0015))
-        const contentX = (mx - v.x) / v.zoom
-        const contentY = (my - v.y) / v.zoom
-        const pan = clampPan(
-          { x: mx - contentX * newZoom, y: my - contentY * newZoom },
-          newZoom,
-          rect
-        )
-        return { zoom: newZoom, x: pan.x, y: pan.y }
-      })
-    }
-
-    el.addEventListener("wheel", handleWheel, { passive: false })
-    return () => el.removeEventListener("wheel", handleWheel)
-  }, [])
 
   return (
     <div>
@@ -174,7 +103,7 @@ export function RadarPicker({ radarSrc }: { radarSrc: string }) {
         >
           <div
             ref={contentRef}
-            onMouseDown={handleMouseDown}
+            onMouseDown={(e) => handleMouseDown(e, (ev) => placePointAt(ev.clientX, ev.clientY))}
             className={`absolute inset-0 origin-top-left ${
               step === "done" ? (view.zoom > 1 ? "cursor-grab" : "") : "cursor-crosshair"
             }`}

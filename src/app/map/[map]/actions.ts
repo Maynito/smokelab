@@ -7,7 +7,7 @@ import { redirect } from "next/navigation"
 import { revalidatePath } from "next/cache"
 import type { GrenadeType } from "@/types"
 
-const MEDIA_FIELDS = ["media_setup", "media_aim", "media_result"] as const
+const MEDIA_FIELDS = ["media_lineup", "media_result", "media_gif"] as const
 
 export async function createLineup(formData: FormData) {
   const session = await getSession()
@@ -74,9 +74,9 @@ export async function createLineup(formData: FormData) {
     to_y: toY,
     tags,
     difficulty,
-    media_setup: mediaUrls[0],
-    media_aim: mediaUrls[1],
-    media_result: mediaUrls[2],
+    media_lineup: mediaUrls[0],
+    media_result: mediaUrls[1],
+    media_gif: mediaUrls[2],
     created_by: session.user.id,
   })
 
@@ -84,4 +84,41 @@ export async function createLineup(formData: FormData) {
 
   revalidatePath(`/map/${map}`)
   redirect(`/map/${map}`)
+}
+
+function storagePathFromPublicUrl(publicUrl: string): string | null {
+  const marker = "/object/public/lineup-media/"
+  const idx = publicUrl.indexOf(marker)
+  return idx === -1 ? null : publicUrl.slice(idx + marker.length)
+}
+
+export async function deleteLineup(lineupId: string) {
+  const session = await getSession()
+  if (!session.user) throw new Error("Unauthorized")
+
+  const admin = createAdminClient()
+
+  const { data: lineup, error: fetchError } = await admin
+    .from("lineups")
+    .select("map, created_by, media_lineup, media_result, media_gif")
+    .eq("id", lineupId)
+    .single()
+
+  if (fetchError || !lineup) throw new Error("Lineup introuvable")
+
+  const canDelete = session.user.is_admin || lineup.created_by === session.user.id
+  if (!canDelete) throw new Error("Unauthorized")
+
+  const paths = [lineup.media_lineup, lineup.media_result, lineup.media_gif]
+    .map(storagePathFromPublicUrl)
+    .filter((p): p is string => p !== null)
+
+  if (paths.length > 0) {
+    await admin.storage.from("lineup-media").remove(paths)
+  }
+
+  const { error } = await admin.from("lineups").delete().eq("id", lineupId)
+  if (error) throw error
+
+  revalidatePath(`/map/${lineup.map}`)
 }

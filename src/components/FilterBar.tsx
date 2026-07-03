@@ -6,7 +6,7 @@ import { GRENADE_TYPES } from "@/lib/maps"
 const selectClass =
   "bg-zinc-900 border border-zinc-800 rounded-md px-3 py-2 text-sm text-white focus:outline-none focus:border-orange-500"
 
-export function FilterBar() {
+export function FilterBar({ showBookFilter = false }: { showBookFilter?: boolean }) {
   const router = useRouter()
   const pathname = usePathname()
   const searchParams = useSearchParams()
@@ -46,6 +46,18 @@ export function FilterBar() {
         <option value="2">Moyen</option>
         <option value="3">Difficile</option>
       </select>
+
+      {showBookFilter && (
+        <select
+          className={selectClass}
+          defaultValue={searchParams.get("book") ?? ""}
+          onChange={(e) => updateFilter("book", e.target.value)}
+        >
+          <option value="">Toutes les lineups</option>
+          <option value="mine">Dans mon livre</option>
+          <option value="not-mine">Hors de mon livre</option>
+        </select>
+      )}
     </div>
   )
 }
