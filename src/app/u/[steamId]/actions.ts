@@ -3,6 +3,8 @@
 import { getSession } from "@/lib/session"
 import { createAdminClient } from "@/lib/supabase"
 import { isMapName } from "@/lib/maps"
+import { can } from "@/lib/roles"
+import { getNotifications, getUnreadNotificationCount, markAllNotificationsRead } from "@/lib/notifications"
 import { revalidatePath } from "next/cache"
 import type { MapName } from "@/types"
 
@@ -32,13 +34,20 @@ export async function deleteBook(bookId: string) {
   if (!session.user) throw new Error("Unauthorized")
 
   const admin = createAdminClient()
-  const { data: book } = await admin.from("books").select("user_id").eq("id", bookId).single()
-  if (!book || book.user_id !== session.user.id) throw new Error("Unauthorized")
+  const { data: book } = await admin
+    .from("books")
+    .select("user_id, users(steam_id)")
+    .eq("id", bookId)
+    .single()
+  if (!book) throw new Error("Livre introuvable")
+  // Le propriétaire, ou un admin (qui peut gérer les livres de tous)
+  if (!can.manageBook(session.user, book)) throw new Error("Unauthorized")
 
   const { error } = await admin.from("books").delete().eq("id", bookId)
   if (error) throw new Error("Échec de la suppression du livre")
 
-  revalidatePath(`/u/${session.user.steam_id}`)
+  const owner = book.users as unknown as { steam_id: string } | null
+  revalidatePath(`/u/${owner?.steam_id ?? session.user.steam_id}`)
 }
 
 export async function getLineupBookIds(lineupId: string): Promise<string[]> {
@@ -197,4 +206,21 @@ export async function toggleFollow(followedUserId: string, followedSteamId: stri
 
   revalidatePath(`/u/${followedSteamId}`)
   revalidatePath(`/u/${session.user.steam_id}`)
+}
+
+export async function getMyNotifications() {
+  const session = await getSession()
+  if (!session.user) return { notifications: [], unreadCount: 0 }
+
+  const [notifications, unreadCount] = await Promise.all([
+    getNotifications(session.user.id),
+    getUnreadNotificationCount(session.user.id),
+  ])
+  return { notifications, unreadCount }
+}
+
+export async function markNotificationsRead() {
+  const session = await getSession()
+  if (!session.user) return
+  await markAllNotificationsRead(session.user.id)
 }

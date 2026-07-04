@@ -7,7 +7,7 @@ import { RadarPicker } from "@/components/RadarPicker"
 import { TagInput } from "@/components/TagInput"
 import { MediaView } from "@/components/MediaView"
 import type { LineupFormState } from "@/app/map/[map]/actions"
-import type { Difficulty, GrenadeType, MapName } from "@/types"
+import type { BookSummary, Difficulty, GrenadeType, MapName } from "@/types"
 
 const inputClass =
   "w-full bg-zinc-900 border border-zinc-800 rounded-md px-3 py-2 text-sm text-white focus:outline-none focus:border-orange-500"
@@ -37,12 +37,23 @@ export function LineupForm({
   submitLabel,
   defaultValues,
   currentMedia,
+  myBooks,
+  initialBookIds,
+  scopedBookId,
 }: {
   map: MapName
   action: (prevState: LineupFormState, formData: FormData) => Promise<LineupFormState>
   submitLabel: string
   defaultValues?: DefaultValues
   currentMedia?: CurrentMedia
+  // Livres du viewer pour cette map — proposés uniquement à la création, pour
+  // ranger la lineup directement dedans (édition : passe par le BookPicker).
+  myBooks?: BookSummary[]
+  initialBookIds?: string[]
+  // Créée depuis le bouton "+ Créer une lineup" d'un livre précis : même pour
+  // un admin, la lineup reste hors du pool global — elle vit uniquement dans
+  // ce livre. Voir createLineup (src/app/map/[map]/actions.ts).
+  scopedBookId?: string
 }) {
   const mediaOptional = !!currentMedia
   const [state, formAction, pending] = useActionState(action, undefined)
@@ -51,6 +62,7 @@ export function LineupForm({
     <form action={formAction} className="grid gap-6 lg:grid-cols-2 max-w-4xl">
       <input type="hidden" name="map" value={map} />
       {defaultValues && <input type="hidden" name="lineup_id" value={defaultValues.id} />}
+      {scopedBookId && <input type="hidden" name="scoped_to_book" value={scopedBookId} />}
 
       <div>
         <RadarPicker
@@ -138,6 +150,31 @@ export function LineupForm({
           optional={mediaOptional}
           currentSrc={currentMedia?.media_gif}
         />
+
+        {myBooks && myBooks.length > 0 && (
+          <div>
+            <label className="text-xs text-zinc-400 mb-1 block">
+              Ranger directement dans un ou plusieurs livres
+            </label>
+            <div className="max-h-40 overflow-y-auto space-y-0.5 bg-zinc-900 border border-zinc-800 rounded-md p-1.5">
+              {myBooks.map((book) => (
+                <label
+                  key={book.id}
+                  className="flex items-center gap-2 text-sm text-zinc-300 hover:bg-zinc-800 rounded-md px-2 py-1.5 cursor-pointer"
+                >
+                  <input
+                    type="checkbox"
+                    name="book_ids"
+                    value={book.id}
+                    defaultChecked={initialBookIds?.includes(book.id)}
+                    className="accent-orange-500"
+                  />
+                  {book.name}
+                </label>
+              ))}
+            </div>
+          </div>
+        )}
 
         {state?.error && <p className="text-sm text-red-400">{state.error}</p>}
 

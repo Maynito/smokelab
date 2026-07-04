@@ -2,10 +2,12 @@
 
 import { useState, useTransition } from "react"
 import { createBook } from "@/app/u/[steamId]/actions"
+import { useToast } from "@/components/ToastProvider"
 import { MAPS } from "@/lib/maps"
 import type { MapName } from "@/types"
 
 export function CreateBookInline() {
+  const toast = useToast()
   const [open, setOpen] = useState(false)
   const [name, setName] = useState("")
   const [map, setMap] = useState<MapName>("mirage")
@@ -21,6 +23,7 @@ export function CreateBookInline() {
         await createBook(trimmed, map)
         setName("")
         setOpen(false)
+        toast(`Livre « ${trimmed} » créé.`)
       } catch {
         setError("Échec de la création.")
       }

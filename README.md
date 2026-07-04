@@ -45,10 +45,22 @@ Remplir dans `.env.local` :
 
 ### 3. Base de données Supabase
 
-Dans le SQL Editor du projet Supabase, exécuter **dans l'ordre** :
+Les migrations vivent dans [`supabase/migrations/`](./supabase/migrations/) (numérotées, `001_initial_schema.sql` étant le schéma de base). Deux façons de les appliquer :
 
-1. [`supabase/schema.sql`](./supabase/schema.sql) — tables `users`, `lineups`, `user_lineups` + RLS
-2. Chaque fichier de [`supabase/migrations/`](./supabase/migrations/), dans l'ordre numérique
+**En ligne de commande (recommandé)** — nécessite `SUPABASE_DB_URL` dans `.env.local` (Dashboard → Connect → URI, version *Session pooler*, port 5432) :
+
+```bash
+npm run db:migrate            # applique les migrations manquantes
+npm run db:migrate -- --dry-run  # aperçu sans rien exécuter
+```
+
+La CLI Supabase note en base (`supabase_migrations.schema_migrations`) ce qui a déjà été appliqué. Si des migrations ont été passées à la main dans le SQL Editor avant d'utiliser la CLI, les marquer comme faites d'abord :
+
+```bash
+npx supabase migration repair --status applied 001 002 003 --db-url "$SUPABASE_DB_URL"
+```
+
+**À la main** — coller chaque fichier dans l'ordre numérique dans le SQL Editor du Dashboard.
 
 Créer ensuite le bucket de stockage des médias (`lineup-media`, public) — **pas possible via le SQL Editor** sur Supabase hosted (écriture directe sur `storage.buckets` bloquée), il faut passer par le Dashboard (Storage → New bucket → cocher "Public") ou l'API :
 

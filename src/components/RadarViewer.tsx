@@ -134,7 +134,7 @@ export function RadarViewer({
 
       <div
         ref={frameRef}
-        className="relative aspect-square h-[55vh] max-w-full overflow-hidden rounded-lg"
+        className="relative aspect-square h-[55vh] max-w-full overflow-hidden rounded-lg bg-zinc-900 border border-zinc-700 shadow-[0_0_0_1px_rgba(0,0,0,0.5)] ring-1 ring-white/5"
       >
         <div
           onMouseDown={(e) => handleMouseDown(e, () => setSelectedKey(null))}
@@ -258,9 +258,8 @@ export function RadarViewer({
                 title={
                   cluster.items.length > 1
                     ? cluster.items.map((l) => `${l.type} — ${l.from_pos} → ${l.to_pos}`).join("\n")
-                    : undefined
+                    : `${cluster.items[0].from_pos} → ${cluster.items[0].to_pos}`
                 }
-                {...(cluster.items.length === 1 ? hoverHandlers(cluster.items[0].id) : {})}
                 onMouseDown={(e) => e.stopPropagation()}
                 onClick={(e) => {
                   e.stopPropagation()
@@ -277,17 +276,12 @@ export function RadarViewer({
                     {cluster.items.length}
                   </span>
                 )}
-                {hoveredId === cluster.items[0].id && cluster.items.length === 1 && (
-                  <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 z-30 pointer-events-none">
-                    <HoverPreview lineup={cluster.items[0]} />
-                  </div>
-                )}
               </button>
             )
           })}
         </div>
 
-        {view.zoom > 1 && (
+        {view.zoom > 1 ? (
           <button
             type="button"
             onClick={reset}
@@ -295,6 +289,14 @@ export function RadarViewer({
           >
             Réinitialiser la vue
           </button>
+        ) : (
+          <div className="absolute bottom-2 left-2 z-10 flex items-center gap-1 rounded-md bg-black/60 px-2 py-1 text-[11px] text-zinc-300 pointer-events-none">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-3.5 h-3.5 shrink-0">
+              <circle cx="11" cy="11" r="7" />
+              <path d="m21 21-4.3-4.3M11 8v6M8 11h6" strokeLinecap="round" />
+            </svg>
+            Molette pour zoomer, glisser pour déplacer
+          </div>
         )}
       </div>
     </div>

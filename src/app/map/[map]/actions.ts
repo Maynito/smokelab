@@ -3,8 +3,11 @@
 import { getSession } from "@/lib/session"
 import { createAdminClient } from "@/lib/supabase"
 import { isMapName, GRENADE_TYPES } from "@/lib/maps"
+import { roleOf, can } from "@/lib/roles"
 import { redirect } from "next/navigation"
 import { revalidatePath } from "next/cache"
+import { setLineupBooks } from "@/app/u/[steamId]/actions"
+import { createNotification } from "@/lib/notifications"
 import type { GrenadeType } from "@/types"
 
 const MEDIA_FIELDS = ["media_lineup", "media_result", "media_gif"] as const
@@ -71,27 +74,52 @@ export async function createLineup(
     mediaUrls.push(admin.storage.from("lineup-media").getPublicUrl(path).data.publicUrl)
   }
 
-  const { error } = await admin.from("lineups").insert({
-    map,
-    type,
-    from_pos: fromPos.trim(),
-    to_pos: toPos.trim(),
-    from_x: fromX,
-    from_y: fromY,
-    to_x: toX,
-    to_y: toY,
-    tags,
-    difficulty,
-    media_lineup: mediaUrls[0],
-    media_result: mediaUrls[1],
-    media_gif: mediaUrls[2],
-    created_by: session.user.id,
-  })
+  // Admin -> directement dans le pool de la map ; utilisateur normal ->
+  // lineup perso (profil + livres), à proposer ensuite à un admin. Exception :
+  // créée depuis le bouton "+ Créer une lineup" d'un livre précis (même pour
+  // un admin) -> reste perso, elle ne vit que dans ce livre.
+  const scopedBookId = formData.get("scoped_to_book")
+  const isScopedToBook = typeof scopedBookId === "string" && scopedBookId.length > 0
+  const publishesToPool = !isScopedToBook && can.publishToPool(roleOf(session.user))
 
-  if (error) return { error: "Échec de l'enregistrement de la lineup. Réessaie." }
+  const { data: inserted, error } = await admin
+    .from("lineups")
+    .insert({
+      map,
+      type,
+      from_pos: fromPos.trim(),
+      to_pos: toPos.trim(),
+      from_x: fromX,
+      from_y: fromY,
+      to_x: toX,
+      to_y: toY,
+      tags,
+      difficulty,
+      media_lineup: mediaUrls[0],
+      media_result: mediaUrls[1],
+      media_gif: mediaUrls[2],
+      status: publishesToPool ? "approved" : "personal",
+      created_by: session.user.id,
+    })
+    .select("id")
+    .single()
+
+  if (error || !inserted) return { error: "Échec de l'enregistrement de la lineup. Réessaie." }
+
+  const bookIds = formData.getAll("book_ids").map(String)
+  if (bookIds.length > 0) await setLineupBooks(inserted.id, bookIds)
 
   revalidatePath(`/map/${map}`)
-  redirect(`/map/${map}`)
+  revalidatePath(`/u/${session.user.steam_id}`)
+
+  if (publishesToPool) {
+    redirect(`/map/${map}?toast=lineup-pool-created`)
+  }
+  if (isScopedToBook && bookIds.includes(String(scopedBookId))) {
+    revalidatePath(`/u/${session.user.steam_id}/books/${scopedBookId}`)
+    redirect(`/u/${session.user.steam_id}/books/${scopedBookId}?toast=lineup-created`)
+  }
+  redirect(`/u/${session.user.steam_id}?toast=lineup-created`)
 }
 
 export async function updateLineup(
@@ -108,14 +136,15 @@ export async function updateLineup(
 
   const { data: existing, error: fetchError } = await admin
     .from("lineups")
-    .select("created_by, media_lineup, media_result, media_gif")
+    .select("created_by, status, media_lineup, media_result, media_gif")
     .eq("id", lineupId)
     .single()
 
   if (fetchError || !existing) return { error: "Lineup introuvable." }
 
-  const canEdit = session.user.is_admin || existing.created_by === session.user.id
-  if (!canEdit) return { error: "Tu n'as pas le droit de modifier cette lineup." }
+  if (!can.manageLineup(session.user, existing)) {
+    return { error: "Tu n'as pas le droit de modifier cette lineup." }
+  }
 
   const map = formData.get("map")
   if (typeof map !== "string" || !isMapName(map)) return { error: "Map invalide." }
@@ -187,7 +216,13 @@ export async function updateLineup(
   if (error) return { error: "Échec de l'enregistrement des modifications. Réessaie." }
 
   revalidatePath(`/map/${map}`)
-  redirect(`/map/${map}`)
+  revalidatePath(`/u/${session.user.steam_id}`)
+  // Une lineup du pool renvoie vers la map, une lineup perso vers le profil
+  redirect(
+    existing.status === "approved"
+      ? `/map/${map}?toast=lineup-updated`
+      : `/u/${session.user.steam_id}?toast=lineup-updated`
+  )
 }
 
 function storagePathFromPublicUrl(publicUrl: string): string | null {
@@ -209,9 +244,7 @@ export async function deleteLineup(lineupId: string) {
     .single()
 
   if (fetchError || !lineup) throw new Error("Lineup introuvable")
-
-  const canDelete = session.user.is_admin || lineup.created_by === session.user.id
-  if (!canDelete) throw new Error("Unauthorized")
+  if (!can.manageLineup(session.user, lineup)) throw new Error("Unauthorized")
 
   const paths = [lineup.media_lineup, lineup.media_result, lineup.media_gif]
     .map(storagePathFromPublicUrl)
@@ -225,4 +258,115 @@ export async function deleteLineup(lineupId: string) {
   if (error) throw new Error("Échec de la suppression. Réessaie.")
 
   revalidatePath(`/map/${lineup.map}`)
+  revalidatePath(`/u/${session.user.steam_id}`)
+}
+
+// Propose une lineup perso (ou refusée) à la validation d'un admin. Passe son
+// statut à "pending" — elle apparaît alors dans l'onglet "Propositions" de la
+// map pour les admins, en plus de rester visible sur le profil de son auteur.
+export async function proposeLineup(lineupId: string) {
+  const session = await getSession()
+  if (!session.user) throw new Error("Unauthorized")
+
+  const admin = createAdminClient()
+  const { data: lineup, error: fetchError } = await admin
+    .from("lineups")
+    .select("map, created_by, status, from_pos, to_pos")
+    .eq("id", lineupId)
+    .single()
+
+  if (fetchError || !lineup) throw new Error("Lineup introuvable")
+  if (!can.proposeLineup(session.user, lineup)) throw new Error("Unauthorized")
+
+  const { error } = await admin
+    .from("lineups")
+    .update({ status: "pending", rejection_reason: null })
+    .eq("id", lineupId)
+
+  if (error) throw new Error("Échec de la proposition. Réessaie.")
+
+  const { data: admins } = await admin.from("users").select("id").eq("is_admin", true)
+  await Promise.all(
+    (admins ?? []).map((a) =>
+      createNotification(
+        a.id as string,
+        "lineup_proposed",
+        `${session.user!.steam_name} propose une lineup (${lineup.from_pos} → ${lineup.to_pos}) sur ${lineup.map}.`,
+        `/map/${lineup.map}?lineup=${lineupId}`
+      )
+    )
+  )
+
+  revalidatePath(`/map/${lineup.map}`)
+  revalidatePath(`/u/${session.user.steam_id}`)
+}
+
+export async function approveLineup(lineupId: string) {
+  const session = await getSession()
+  if (!can.reviewLineup(roleOf(session.user))) throw new Error("Unauthorized")
+
+  const admin = createAdminClient()
+  const { data: lineup, error: fetchError } = await admin
+    .from("lineups")
+    .select("map, created_by, from_pos, to_pos, status, users(steam_id)")
+    .eq("id", lineupId)
+    .single()
+
+  if (fetchError || !lineup) throw new Error("Lineup introuvable")
+  if (lineup.status !== "pending") throw new Error("Cette lineup n'est plus en attente.")
+
+  const { error } = await admin
+    .from("lineups")
+    .update({ status: "approved", rejection_reason: null })
+    .eq("id", lineupId)
+
+  if (error) throw new Error("Échec de la validation. Réessaie.")
+
+  await createNotification(
+    lineup.created_by,
+    "lineup_approved",
+    `Ta lineup ${lineup.from_pos} → ${lineup.to_pos} (${lineup.map}) a été ajoutée au pool.`,
+    `/map/${lineup.map}?lineup=${lineupId}`
+  )
+
+  revalidatePath(`/map/${lineup.map}`)
+  const ownerSteamId = (lineup.users as unknown as { steam_id: string } | null)?.steam_id
+  if (ownerSteamId) revalidatePath(`/u/${ownerSteamId}`)
+}
+
+export async function rejectLineup(lineupId: string, reason: string) {
+  const session = await getSession()
+  if (!can.reviewLineup(roleOf(session.user))) throw new Error("Unauthorized")
+
+  const trimmedReason = reason.trim()
+  if (!trimmedReason) throw new Error("Indique un motif de refus.")
+
+  const admin = createAdminClient()
+  const { data: lineup, error: fetchError } = await admin
+    .from("lineups")
+    .select("map, created_by, from_pos, to_pos, status, users(steam_id)")
+    .eq("id", lineupId)
+    .single()
+
+  if (fetchError || !lineup) throw new Error("Lineup introuvable")
+  if (lineup.status !== "pending") throw new Error("Cette lineup n'est plus en attente.")
+
+  const { error } = await admin
+    .from("lineups")
+    .update({ status: "rejected", rejection_reason: trimmedReason })
+    .eq("id", lineupId)
+
+  if (error) throw new Error("Échec du refus. Réessaie.")
+
+  const ownerSteamId = (lineup.users as unknown as { steam_id: string } | null)?.steam_id
+
+  await createNotification(
+    lineup.created_by,
+    "lineup_rejected",
+    `Ta lineup ${lineup.from_pos} → ${lineup.to_pos} (${lineup.map}) a été refusée : ${trimmedReason}`,
+    ownerSteamId ? `/u/${ownerSteamId}` : null
+  )
+
+  revalidatePath(`/map/${lineup.map}`)
+  if (ownerSteamId) revalidatePath(`/u/${ownerSteamId}`)
 }

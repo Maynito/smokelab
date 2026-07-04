@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from "react"
 import { createBook } from "@/app/u/[steamId]/actions"
+import { useToast } from "@/components/ToastProvider"
 import type { MapName } from "@/types"
 
 export function BookPicker({
@@ -17,6 +18,7 @@ export function BookPicker({
   onClose: () => void
   onSave: (bookIds: string[]) => Promise<void>
 }) {
+  const toast = useToast()
   const [localBooks, setLocalBooks] = useState(books)
   const [selected, setSelected] = useState<Set<string>>(new Set(initiallySelected))
   const [newName, setNewName] = useState("")
@@ -43,6 +45,7 @@ export function BookPicker({
         setLocalBooks((b) => [...b, book])
         setSelected((s) => new Set([...s, book.id]))
         setNewName("")
+        toast(`Livre « ${book.name} » créé.`)
       } catch {
         setError("Impossible de créer le livre.")
       }

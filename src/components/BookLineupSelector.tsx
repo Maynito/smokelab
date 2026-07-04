@@ -1,27 +1,38 @@
 "use client"
 
 import { useState } from "react"
-import type { BookSummary, Lineup } from "@/types"
+import type { BookSummary, Lineup, LineupBookmark } from "@/types"
 import { LineupCard } from "@/components/LineupCard"
+import { LineupBookmarkBadge } from "@/components/LineupBookmarkBadge"
 import { LineupDetailModal } from "@/components/LineupDetailModal"
 import { BookPicker } from "@/components/BookPicker"
+import { useToast } from "@/components/ToastProvider"
 import { addLineupsToBooks } from "@/app/u/[steamId]/actions"
 
 export function BookLineupSelector({
   lineups,
   currentUserId,
   isAdmin,
-  bookmarkedIds,
+  bookmarks,
+  viewerSteamId,
   myBooks,
+  openLineupId: controlledOpenId,
+  onOpenLineupIdChange,
 }: {
   lineups: Lineup[]
   currentUserId: string
   isAdmin: boolean
-  bookmarkedIds: string[]
+  bookmarks: LineupBookmark[]
+  viewerSteamId: string | null
   myBooks: BookSummary[]
+  openLineupId?: string | null
+  onOpenLineupIdChange?: (id: string | null) => void
 }) {
+  const toast = useToast()
   const [selected, setSelected] = useState<Set<string>>(new Set())
-  const [openLineupId, setOpenLineupId] = useState<string | null>(null)
+  const [internalOpenId, setInternalOpenId] = useState<string | null>(null)
+  const openLineupId = controlledOpenId !== undefined ? controlledOpenId : internalOpenId
+  const setOpenLineupId = onOpenLineupIdChange ?? setInternalOpenId
   const [pickerOpen, setPickerOpen] = useState(false)
 
   const map = lineups[0]?.map
@@ -37,8 +48,10 @@ export function BookLineupSelector({
   }
 
   async function handleSave(bookIds: string[]) {
+    const count = selected.size
     await addLineupsToBooks([...selected], bookIds)
     setSelected(new Set())
+    toast(`${count} lineup${count !== 1 ? "s" : ""} ajoutée${count !== 1 ? "s" : ""} à tes livres.`)
   }
 
   return (
@@ -64,10 +77,10 @@ export function BookLineupSelector({
                 </svg>
               )}
             </button>
-            <LineupCard
-              lineup={lineup}
-              isBookmarked={bookmarkedIds.includes(lineup.id)}
-              onOpen={() => setOpenLineupId(lineup.id)}
+            <LineupCard lineup={lineup} onOpen={() => setOpenLineupId(lineup.id)} />
+            <LineupBookmarkBadge
+              bookmarks={bookmarks.filter((b) => b.lineupId === lineup.id)}
+              viewerSteamId={viewerSteamId}
             />
           </div>
         ))}

@@ -1,5 +1,5 @@
 import { createAdminClient } from "@/lib/supabase"
-import type { MapName } from "@/types"
+import type { Lineup, LineupBookmark, MapName } from "@/types"
 
 export async function getUserBooks(userId: string, map?: MapName) {
   let query = createAdminClient()
@@ -40,12 +40,36 @@ export async function getUserBooksWithCounts(userId: string) {
   return (books ?? []).map((b) => ({ ...b, count: counts.get(b.id as string) ?? 0 }))
 }
 
-export async function getBookmarkedLineupIds(userId: string) {
+// Pour la prévisualisation "mon livre" sur la map d'un pool : les lineups de
+// tous les livres de l'utilisateur pour cette map, groupées par livre.
+// Inclut ses lineups perso (non "approved") qui ne sont pas dans le pool.
+export async function getUserBookLineupsForMap(userId: string, map: MapName) {
   const { data, error } = await createAdminClient()
     .from("book_lineups")
-    .select("lineup_id, books!inner(user_id)")
+    .select("book_id, lineups(*), books!inner(user_id, map)")
+    .eq("books.user_id", userId)
+    .eq("books.map", map)
+
+  if (error) throw error
+
+  return ((data ?? []) as unknown as { book_id: string; lineups: Lineup | null }[])
+    .filter((row): row is { book_id: string; lineups: Lineup } => row.lineups !== null)
+    .map((row) => ({ bookId: row.book_id, lineup: row.lineups }))
+}
+
+// Pour le ruban "favori" sur une LineupCard : dans quel(s) livre(s) du viewer
+// se trouve chaque lineup, afin que le ruban puisse renvoyer vers le livre.
+export async function getBookmarkedLineupBooks(userId: string): Promise<LineupBookmark[]> {
+  const { data, error } = await createAdminClient()
+    .from("book_lineups")
+    .select("lineup_id, book_id, books!inner(user_id, name)")
     .eq("books.user_id", userId)
 
   if (error) throw error
-  return new Set((data ?? []).map((row) => row.lineup_id as string))
+
+  return (data ?? []).map((row) => ({
+    lineupId: row.lineup_id as string,
+    bookId: row.book_id as string,
+    bookName: (row.books as unknown as { name: string }).name,
+  }))
 }

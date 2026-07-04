@@ -21,6 +21,10 @@ export default function LoginPage({
           Se connecter avec Steam
         </a>
 
+        <a href="/" className="text-sm text-zinc-500 hover:text-white transition-colors">
+          Continuer sans compte →
+        </a>
+
         {/* Error message rendered server-side via searchParams */}
         <AuthError searchParams={searchParams} />
       </div>

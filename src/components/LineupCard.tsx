@@ -1,40 +1,32 @@
 import type { Lineup } from "@/types"
 import { MAP_IMAGES } from "@/lib/mapImages"
 import { MediaView } from "@/components/MediaView"
-import { TypeBadge, DifficultyDots } from "@/components/LineupBadges"
+import { TypeBadge, DifficultyDots, StatusBadge } from "@/components/LineupBadges"
 
 export function LineupCard({
   lineup,
-  isBookmarked,
   onOpen,
 }: {
   lineup: Lineup
-  isBookmarked: boolean
   onOpen: () => void
 }) {
   return (
     <button
       type="button"
       onClick={onOpen}
-      className="text-left w-full rounded-lg border border-zinc-800 bg-zinc-900 overflow-hidden hover:border-zinc-700 transition-colors"
+      className="group flex flex-col h-full text-left w-full rounded-lg border border-zinc-800 bg-zinc-900 overflow-hidden hover:border-orange-500 transition-colors duration-150 hover:-translate-y-0.5 hover:shadow-lg hover:shadow-black/50"
     >
-      <div className="aspect-video bg-zinc-800 relative">
+      <div className="aspect-video bg-zinc-800 relative overflow-hidden shrink-0">
         <MediaView
           src={lineup.media_gif}
           alt={`${lineup.from_pos} → ${lineup.to_pos}`}
-          className="w-full h-full object-cover"
+          className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
         />
         <TypeBadge type={lineup.type} className="absolute top-2 left-2 bg-zinc-950/80" />
-        {isBookmarked && (
-          <span className="absolute top-2 right-2 rounded-full bg-orange-500 p-1 text-white">
-            <svg viewBox="0 0 24 24" fill="currentColor" className="w-3 h-3">
-              <path d="M6 3a1 1 0 0 0-1 1v17l7-4 7 4V4a1 1 0 0 0-1-1H6Z" />
-            </svg>
-          </span>
-        )}
+        <StatusBadge status={lineup.status} className="absolute bottom-2 left-2 bg-zinc-950/80" />
       </div>
 
-      <div className="p-3">
+      <div className="p-3 flex flex-col flex-1">
         <div className="flex items-center justify-between mb-1">
           <span className="flex items-center gap-1.5 text-sm font-medium text-white capitalize">
             {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -49,7 +41,7 @@ export function LineupCard({
         </p>
 
         {lineup.tags.length > 0 && (
-          <div className="flex flex-wrap gap-1 mt-2">
+          <div className="flex flex-wrap gap-1 mt-auto pt-2">
             {lineup.tags.map((tag) => (
               <span key={tag} className="text-[10px] px-1.5 py-0.5 rounded bg-zinc-800 text-zinc-400">
                 {tag}

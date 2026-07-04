@@ -1,7 +1,8 @@
 import { getSession } from "@/lib/session"
-import { redirect, notFound } from "next/navigation"
+import { notFound } from "next/navigation"
 import { createAdminClient } from "@/lib/supabase"
-import { getUserBooksWithCounts, getUserBooks, getBookmarkedLineupIds } from "@/lib/books"
+import { can, roleOf } from "@/lib/roles"
+import { getUserBooksWithCounts, getUserBooks, getBookmarkedLineupBooks } from "@/lib/books"
 import { LineupGrid } from "@/components/LineupGrid"
 import { FollowButton } from "@/components/FollowButton"
 import { SiteHeader } from "@/components/SiteHeader"
@@ -56,22 +57,23 @@ export default async function ProfilePage({
   params: Promise<{ steamId: string }>
 }) {
   const session = await getSession()
-  if (!session.user) redirect("/login")
+  const viewer = session.user ?? null
+  const viewerRole = roleOf(viewer)
 
   const { steamId } = await params
   const profileUser = await getProfileUser(steamId)
   if (!profileUser) notFound()
 
-  const isOwnProfile = profileUser.id === session.user.id
+  const isOwnProfile = viewer !== null && profileUser.id === viewer.id
 
-  const [books, followCounts, createdLineups, viewerBookmarkedIds, viewerBooks, isFollowing] =
+  const [books, followCounts, createdLineups, viewerBookmarks, viewerBooks, isFollowing] =
     await Promise.all([
       getUserBooksWithCounts(profileUser.id),
       getFollowCounts(profileUser.id),
       getCreatedLineups(profileUser.id),
-      getBookmarkedLineupIds(session.user.id),
-      getUserBooks(session.user.id),
-      isOwnProfile ? Promise.resolve(false) : getIsFollowing(session.user.id, profileUser.id),
+      viewer ? getBookmarkedLineupBooks(viewer.id) : Promise.resolve([]),
+      viewer ? getUserBooks(viewer.id) : Promise.resolve([]),
+      viewer && !isOwnProfile ? getIsFollowing(viewer.id, profileUser.id) : Promise.resolve(false),
     ])
 
   const booksByMap = new Map<MapName, typeof books>()
@@ -81,9 +83,12 @@ export default async function ProfilePage({
     booksByMap.set(book.map as MapName, list)
   }
 
+  const canDeleteBooks = viewer !== null && can.manageBook(viewer, { user_id: profileUser.id })
+  const canCopyBooks = viewer !== null && !isOwnProfile
+
   return (
     <main className="min-h-screen bg-zinc-950 text-white">
-      <SiteHeader user={session.user} />
+      <SiteHeader user={viewer} />
       <div className="max-w-[1100px] mx-auto px-6 py-8">
         <div className="flex items-center justify-between mb-8 flex-wrap gap-4">
           <div className="flex items-center gap-4">
@@ -102,7 +107,7 @@ export default async function ProfilePage({
             </div>
           </div>
 
-          {!isOwnProfile && (
+          {can.follow(viewerRole) && !isOwnProfile && (
             <FollowButton
               followedUserId={profileUser.id}
               followedSteamId={profileUser.steam_id}
@@ -126,7 +131,13 @@ export default async function ProfilePage({
                   <h3 className="text-sm font-medium text-zinc-400 capitalize mb-2">{map}</h3>
                   <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
                     {mapBooks.map((book) => (
-                      <BookCard key={book.id} steamId={steamId} book={book} isOwn={isOwnProfile} />
+                      <BookCard
+                        key={book.id}
+                        steamId={steamId}
+                        book={book}
+                        canDelete={canDeleteBooks}
+                        canCopy={canCopyBooks}
+                      />
                     ))}
                   </div>
                 </div>
@@ -144,9 +155,10 @@ export default async function ProfilePage({
           ) : (
             <LineupGrid
               lineups={createdLineups}
-              currentUserId={session.user.id}
-              isAdmin={session.user.is_admin}
-              bookmarkedIds={[...viewerBookmarkedIds]}
+              currentUserId={viewer?.id ?? null}
+              isAdmin={viewerRole === "admin"}
+              bookmarks={viewerBookmarks}
+              viewerSteamId={viewer?.steam_id ?? null}
               myBooks={viewerBooks}
             />
           )}

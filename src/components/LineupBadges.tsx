@@ -31,3 +31,28 @@ export function TypeBadge({ type, className }: { type: Lineup["type"]; className
     </span>
   )
 }
+
+const STATUS_LABELS: Partial<Record<Lineup["status"], string>> = {
+  pending: "En attente",
+  rejected: "Refusée",
+}
+
+const STATUS_COLORS: Partial<Record<Lineup["status"], string>> = {
+  pending: "bg-yellow-400/10 text-yellow-300 border-yellow-400/30",
+  rejected: "bg-red-500/10 text-red-400 border-red-500/30",
+}
+
+// N'affiche rien pour "personal"/"approved" — seuls "pending"/"rejected"
+// sont des états qui méritent d'attirer l'oeil de l'auteur sur son profil.
+export function StatusBadge({ status, className }: { status: Lineup["status"]; className?: string }) {
+  const label = STATUS_LABELS[status]
+  if (!label) return null
+
+  return (
+    <span
+      className={`text-xs px-2 py-0.5 rounded border ${STATUS_COLORS[status]} ${className ?? ""}`}
+    >
+      {label}
+    </span>
+  )
+}

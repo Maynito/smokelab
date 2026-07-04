@@ -1,5 +1,4 @@
 import { getSession } from "@/lib/session"
-import { redirect } from "next/navigation"
 import Link from "next/link"
 import { MAPS } from "@/lib/maps"
 import { MAP_ICONS, MAP_IMAGES } from "@/lib/mapImages"
@@ -7,11 +6,10 @@ import { SiteHeader } from "@/components/SiteHeader"
 
 export default async function HomePage() {
   const session = await getSession()
-  if (!session.user) redirect("/login")
 
   return (
     <main className="min-h-screen bg-zinc-950 text-white">
-      <SiteHeader user={session.user} />
+      <SiteHeader user={session.user ?? null} />
 
       <div className="max-w-[1100px] mx-auto px-6 py-8">
         <div className="flex items-baseline justify-between mb-5">
