@@ -1,3 +1,5 @@
+import Link from "next/link"
+
 export default function LoginPage({
   searchParams,
 }: {
@@ -21,9 +23,9 @@ export default function LoginPage({
           Se connecter avec Steam
         </a>
 
-        <a href="/" className="text-sm text-zinc-500 hover:text-white transition-colors">
+        <Link href="/maps" className="text-sm text-zinc-500 hover:text-white transition-colors">
           Continuer sans compte →
-        </a>
+        </Link>
 
         {/* Error message rendered server-side via searchParams */}
         <AuthError searchParams={searchParams} />

@@ -7,7 +7,7 @@ export function SiteHeader({ user }: { user?: SessionUser | null }) {
   return (
     <header className="sticky top-0 z-10 border-b border-zinc-800 bg-zinc-900/80 backdrop-blur">
       <div className="max-w-[1100px] mx-auto px-6 h-14 flex items-center justify-between">
-        <Link href="/" className="text-lg font-bold tracking-tight">
+        <Link href="/maps" className="text-lg font-bold tracking-tight">
           smoke<span className="text-orange-500">lab</span>
         </Link>
         {user ? (

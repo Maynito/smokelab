@@ -6,7 +6,7 @@ const PUBLIC_PATHS = ["/login", "/api/auth"]
 
 // Pages consultables sans compte (rang "invité", lecture seule).
 // Les pages de mutation (/map/x/new, /map/x/<id>/edit) n'y figurent pas.
-const GUEST_PATTERNS = [/^\/$/, /^\/map\/[^/]+$/, /^\/u\//]
+const GUEST_PATTERNS = [/^\/$/, /^\/maps$/, /^\/map\/[^/]+$/, /^\/u\//]
 
 export async function proxy(req: NextRequest) {
   const { pathname } = req.nextUrl
